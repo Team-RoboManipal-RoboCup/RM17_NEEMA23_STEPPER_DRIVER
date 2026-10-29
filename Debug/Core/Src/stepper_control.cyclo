@@ -3,8 +3,8 @@
 ../Core/Inc/stepper_config.h:100:20:delay_us	1
 ../Core/Src/stepper_control.c:17:6:Stepper_Init	1
 ../Core/Src/stepper_control.c:162:6:Stepper_MoveTo	13
-../Core/Src/stepper_control.c:331:6:Stepper_Stop	1
-../Core/Src/stepper_control.c:348:7:Stepper_GetPosition	1
-../Core/Src/stepper_control.c:350:6:Stepper_SetHome	1
-../Core/Src/stepper_control.c:363:6:Stepper_PulseCallback	10
-../Core/Src/stepper_control.c:441:6:Stepper_RampUpdate	1
+../Core/Src/stepper_control.c:324:6:Stepper_Stop	1
+../Core/Src/stepper_control.c:341:7:Stepper_GetPosition	1
+../Core/Src/stepper_control.c:343:6:Stepper_SetHome	1
+../Core/Src/stepper_control.c:356:6:Stepper_PulseCallback	10
+../Core/Src/stepper_control.c:434:6:Stepper_RampUpdate	1

@@ -1,7 +1,7 @@
-../Core/Src/command_parser.c:33:6:CMD_Init	1
-../Core/Src/command_parser.c:39:13:trim_whitespace	5
-../Core/Src/command_parser.c:51:6:CMD_FormatFloat	10
-../Core/Src/command_parser.c:79:13:trim_float_str	4
-../Core/Src/command_parser.c:92:13:execute_command	41
-../Core/Src/command_parser.c:280:6:CMD_ProcessByte	8
-../Core/Src/command_parser.c:303:6:CMD_Poll	3
+../Core/Src/command_parser.c:34:6:CMD_Init	1
+../Core/Src/command_parser.c:40:13:trim_whitespace	5
+../Core/Src/command_parser.c:52:6:CMD_FormatFloat	10
+../Core/Src/command_parser.c:80:13:trim_float_str	4
+../Core/Src/command_parser.c:93:13:execute_command	96
+../Core/Src/command_parser.c:431:6:CMD_ProcessByte	8
+../Core/Src/command_parser.c:454:6:CMD_Poll	3

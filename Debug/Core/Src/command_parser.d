@@ -23,7 +23,7 @@ Core/Src/command_parser.o: ../Core/Src/command_parser.c \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h \
  ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h \
- ../Core/Inc/usb_cdc.h
+ ../Core/Inc/usb_cdc.h ../Core/Inc/closed_loop.h ../Core/Inc/as5600.h
 ../Core/Inc/command_parser.h:
 ../Core/Inc/stepper_control.h:
 ../Core/Inc/stepper_config.h:
@@ -50,3 +50,5 @@ Core/Src/command_parser.o: ../Core/Src/command_parser.c \
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_flash_ex.h:
 ../Drivers/STM32F1xx_HAL_Driver/Inc/stm32f1xx_hal_pwr.h:
 ../Core/Inc/usb_cdc.h:
+../Core/Inc/closed_loop.h:
+../Core/Inc/as5600.h:

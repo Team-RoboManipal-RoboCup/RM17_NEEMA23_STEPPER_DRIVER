@@ -204,19 +204,12 @@ void Stepper_MoveTo(StepperMotor *m, float target_deg, uint32_t ppr,
    *   - Current = 90°,  Target = 450°  -> diff = 360°  (k = 1)  -> DO NOT MOVE.
    * =========================================================================
    */
-  float k_turns = roundf(delta_deg / 360.0f);
-  float modulo_diff = delta_deg - (k_turns * 360.0f);
-
-  /* If difference from an integer multiple of 360 is negligible, we are already
-   * in position */
-  // if (fabsf(modulo_diff) < 0.005f) {
-  //     return; /* Already at target orientation */
-  // }
-
 #if (N_MOTION_SHORTEST_PATH == 1)
   /* Shortest-Path Modulo Mode:
    * Traverses the shortest circular arc (<= 180 deg) on the 360 deg circle
    */
+  float k_turns = roundf(delta_deg / 360.0f);
+  float modulo_diff = delta_deg - (k_turns * 360.0f);
   delta_deg = modulo_diff;
 #endif
 

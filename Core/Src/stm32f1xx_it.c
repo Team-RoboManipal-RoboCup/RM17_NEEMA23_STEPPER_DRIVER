@@ -24,6 +24,7 @@
 /* USER CODE BEGIN Includes */
 #include "stepper_control.h"
 #include "usb_cdc.h"
+#include "closed_loop.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -217,14 +218,14 @@ void TIM2_IRQHandler(void)
 
 /**
   * @brief This function handles TIM3 global interrupt.
-  *        Fires at 10 kHz (100 µs) as the trapezoidal ramp engine.
+  *        Fires at 100 Hz (10 ms) to set the closed-loop PID and sensor update flag.
   */
 void TIM3_IRQHandler(void)
 {
   if (TIM3->SR & TIM_SR_UIF) {
     TIM3->SR = (uint16_t)(~TIM_SR_UIF);
     (void)TIM3->SR;
-    Stepper_RampUpdate(&g_stepper);
+    g_cl_timer_flag = 1;
   }
 }
 

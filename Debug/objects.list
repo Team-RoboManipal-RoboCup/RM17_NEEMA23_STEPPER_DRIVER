@@ -1,3 +1,5 @@
+"./Core/Src/as5600.o"
+"./Core/Src/closed_loop.o"
 "./Core/Src/command_parser.o"
 "./Core/Src/main.o"
 "./Core/Src/stepper_control.o"

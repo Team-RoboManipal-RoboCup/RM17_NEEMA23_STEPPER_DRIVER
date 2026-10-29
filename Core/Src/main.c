@@ -33,6 +33,7 @@
 #include "stepper_direction.h"
 #include "usb_cdc.h"
 #include "command_parser.h"
+#include "closed_loop.h"
 #include <stdio.h>
 /* USER CODE END Includes */
 
@@ -104,10 +105,13 @@ int main(void)
   /* 1. Initialize Stepper Motor Controller (Dual outputs: PA0/PB13 PWM, PA1/PB12 DIR, PA3/PA7 ENA) */
   Stepper_Init(&g_stepper);
 
-  /* 2. Initialize USB CDC Virtual COM Port (Forces host re-enumeration on PA12) */
+  /* 2. Initialize Closed-Loop Controller & AS5600 Sensor (Reads initial position from sensor) */
+  ClosedLoop_Init(&g_stepper);
+
+  /* 3. Initialize USB CDC Virtual COM Port (Forces host re-enumeration on PA12) */
   USB_CDC_Init();
 
-  /* 3. Initialize Command Parser */
+  /* 4. Initialize Command Parser */
   CMD_Init();
 
   /* Brief delay to allow host to finish USB CDC enumeration */
@@ -135,7 +139,14 @@ int main(void)
     /* Periodic parser poll (auto-executes commands sent without newline) */
     CMD_Poll(&g_stepper);
 
-    /* 2. Check if a motion move has just finished */
+    /* 2. Non-blocking Closed-Loop PID and AS5600 sensor update (100 Hz fixed interval) */
+    if (g_cl_timer_flag)
+    {
+      g_cl_timer_flag = 0;
+      ClosedLoop_Update(&g_stepper);
+    }
+
+    /* 3. Check if a motion move has just finished */
     if (g_last_moving && !g_stepper.moving)
     {
       char pos_str[32];

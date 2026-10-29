@@ -17,6 +17,7 @@
 #include "stepper_config.h"
 #include "stm32f1xx_hal.h"
 #include "usb_cdc.h"
+#include "closed_loop.h"
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
@@ -127,7 +128,8 @@ static void execute_command(char *line, StepperMotor *motor) {
   if (strcasecmp(line, "H") == 0 || strcasecmp(line, "HOME") == 0 ||
       strcasecmp(line, "ZERO") == 0) {
     Stepper_SetHome(motor);
-    USB_CDC_Print("HOME: Position reset to 0.0 DEG\r\n");
+    ClosedLoop_ResetTracking(motor);
+    USB_CDC_Print("HOME: Position and Encoder reset to 0.0 DEG\r\n");
     return;
   }
 
@@ -142,11 +144,160 @@ static void execute_command(char *line, StepperMotor *motor) {
 
   /* 4. Status Query: "?" or "STATUS" */
   if (strcmp(line, "?") == 0 || strcasecmp(line, "STATUS") == 0) {
+    char enc_str[32], err_str[32];
     CMD_FormatFloat(pos_str, sizeof(pos_str), Stepper_GetPosition(motor), 3);
+    CMD_FormatFloat(enc_str, sizeof(enc_str), ClosedLoop_GetMeasuredDeg(), 3);
+    CMD_FormatFloat(err_str, sizeof(err_str), ClosedLoop_GetFollowingError(), 3);
     snprintf(reply, sizeof(reply),
-             "STATUS: Pos=%s DEG | Moving=%d | State=%d | PPR=%lu\r\n", pos_str,
-             motor->moving, motor->state, (unsigned long)motor->pulses_per_rev);
+             "STATUS: Pos=%s | Enc=%s | Err=%s DEG | Moving=%d | State=%d | PPR=%lu | CL=%d\r\n",
+             pos_str, enc_str, err_str, motor->moving, motor->state,
+             (unsigned long)motor->pulses_per_rev, ClosedLoop_IsEnabled());
     USB_CDC_Print(reply);
+    return;
+  }
+
+  /* 4a. Static Angle Offset Query: "GET_OFFSET" or "OFFSET?" */
+  if (strcasecmp(line, "GET_OFFSET") == 0 || strcasecmp(line, "OFFSET?") == 0) {
+    char off_str[32];
+    CMD_FormatFloat(off_str, sizeof(off_str), ClosedLoop_GetStaticOffset(), 3);
+    snprintf(reply, sizeof(reply), "OFFSET: %s DEG\r\n", off_str);
+    USB_CDC_Print(reply);
+    return;
+  }
+
+  /* 4b. Static Angle Offset Set: "SET_OFFSET <val>" or "OFFSET <val>" */
+  if (strncasecmp(line, "SET_OFFSET", 10) == 0 ||
+      (strncasecmp(line, "OFFSET", 6) == 0 && (line[6] == ' ' || line[6] == '='))) {
+    char *v_ptr = (strncasecmp(line, "SET_OFFSET", 10) == 0) ? (line + 10) : (line + 6);
+    while (isspace((unsigned char)*v_ptr) || *v_ptr == '=') v_ptr++;
+    char *endp;
+    float new_offset = strtof(v_ptr, &endp);
+    if (endp != v_ptr) {
+      ClosedLoop_SetStaticOffset(new_offset, motor);
+      char off_str[32];
+      CMD_FormatFloat(off_str, sizeof(off_str), new_offset, 3);
+      snprintf(reply, sizeof(reply), "OK: Static Offset set to %s DEG\r\n", off_str);
+      USB_CDC_Print(reply);
+    } else {
+      USB_CDC_Print("ERR: Expected SET_OFFSET <degrees>\r\n");
+    }
+    return;
+  }
+
+  /* 4c. PID Gains Query: "GET_PID" or "PID?" */
+  if (strcasecmp(line, "GET_PID") == 0 || strcasecmp(line, "PID?") == 0) {
+    float kp, ki, kd;
+    ClosedLoop_GetPID(&kp, &ki, &kd);
+    char kp_s[32], ki_s[32], kd_s[32], db_s[32];
+    CMD_FormatFloat(kp_s, sizeof(kp_s), kp, 3);
+    CMD_FormatFloat(ki_s, sizeof(ki_s), ki, 3);
+    CMD_FormatFloat(kd_s, sizeof(kd_s), kd, 3);
+    CMD_FormatFloat(db_s, sizeof(db_s), ClosedLoop_GetDeadband(), 3);
+    snprintf(reply, sizeof(reply),
+             "PID: Kp=%s Ki=%s Kd=%s Deadband=%s DEG (CL=%d)\r\n",
+             kp_s, ki_s, kd_s, db_s, ClosedLoop_IsEnabled());
+    USB_CDC_Print(reply);
+    return;
+  }
+
+  /* 4d. PID Gains Set: "SET_PID <kp> <ki> <kd>" or "PID <kp> <ki> <kd>" */
+  if (strncasecmp(line, "SET_PID", 7) == 0 ||
+      (strncasecmp(line, "PID", 3) == 0 && (line[3] == ' ' || line[3] == '='))) {
+    char *p_ptr = (strncasecmp(line, "SET_PID", 7) == 0) ? (line + 7) : (line + 3);
+    while (isspace((unsigned char)*p_ptr) || *p_ptr == '=') p_ptr++;
+    char *t1 = strtok(p_ptr, " ,\t");
+    char *t2 = strtok(NULL, " ,\t");
+    char *t3 = strtok(NULL, " ,\t");
+    if (t1 && t2 && t3) {
+      char *endp;
+      float kp = strtof(t1, &endp);
+      float ki = strtof(t2, &endp);
+      float kd = strtof(t3, &endp);
+      ClosedLoop_SetPID(kp, ki, kd);
+      char kp_s[32], ki_s[32], kd_s[32];
+      CMD_FormatFloat(kp_s, sizeof(kp_s), kp, 3);
+      CMD_FormatFloat(ki_s, sizeof(ki_s), ki, 3);
+      CMD_FormatFloat(kd_s, sizeof(kd_s), kd, 3);
+      snprintf(reply, sizeof(reply), "OK: PID gains set to Kp=%s Ki=%s Kd=%s\r\n",
+               kp_s, ki_s, kd_s);
+      USB_CDC_Print(reply);
+    } else {
+      USB_CDC_Print("ERR: Expected SET_PID <kp> <ki> <kd>\r\n");
+    }
+    return;
+  }
+
+  /* 4e. Deadband Query / Set: "DEADBAND" or "SET_DEADBAND <val>" */
+  if (strcasecmp(line, "GET_DEADBAND") == 0 || strcasecmp(line, "DEADBAND?") == 0) {
+    char db_s[32];
+    CMD_FormatFloat(db_s, sizeof(db_s), ClosedLoop_GetDeadband(), 3);
+    snprintf(reply, sizeof(reply), "DEADBAND: %s DEG\r\n", db_s);
+    USB_CDC_Print(reply);
+    return;
+  }
+  if (strncasecmp(line, "SET_DEADBAND", 12) == 0 ||
+      (strncasecmp(line, "DEADBAND", 8) == 0 && (line[8] == ' ' || line[8] == '='))) {
+    char *d_ptr = (strncasecmp(line, "SET_DEADBAND", 12) == 0) ? (line + 12) : (line + 8);
+    while (isspace((unsigned char)*d_ptr) || *d_ptr == '=') d_ptr++;
+    char *endp;
+    float db = strtof(d_ptr, &endp);
+    if (endp != d_ptr && db >= 0.0f) {
+      ClosedLoop_SetDeadband(db);
+      char db_s[32];
+      CMD_FormatFloat(db_s, sizeof(db_s), db, 3);
+      snprintf(reply, sizeof(reply), "OK: Deadband set to %s DEG\r\n", db_s);
+      USB_CDC_Print(reply);
+    } else {
+      USB_CDC_Print("ERR: Expected SET_DEADBAND <degrees>\r\n");
+    }
+    return;
+  }
+
+  /* 4f. Closed Loop Enable/Disable: "CL_EN <1|0>" or "CLOSED_LOOP <1|0>" */
+  if (strncasecmp(line, "CL_EN", 5) == 0 || strncasecmp(line, "CLOSED_LOOP", 11) == 0) {
+    char *c_ptr = (strncasecmp(line, "CL_EN", 5) == 0) ? (line + 5) : (line + 11);
+    while (isspace((unsigned char)*c_ptr) || *c_ptr == '=') c_ptr++;
+    if (*c_ptr == '1' || strcasecmp(c_ptr, "ON") == 0 || strcasecmp(c_ptr, "ENABLE") == 0) {
+      ClosedLoop_SetEnabled(1);
+      USB_CDC_Print("OK: Closed-loop control ENABLED\r\n");
+    } else if (*c_ptr == '0' || strcasecmp(c_ptr, "OFF") == 0 || strcasecmp(c_ptr, "DISABLE") == 0) {
+      ClosedLoop_SetEnabled(0);
+      USB_CDC_Print("OK: Closed-loop control DISABLED (Open-loop mode)\r\n");
+    } else {
+      snprintf(reply, sizeof(reply), "CL: Currently %s\r\n",
+               ClosedLoop_IsEnabled() ? "ENABLED" : "DISABLED");
+      USB_CDC_Print(reply);
+    }
+    return;
+  }
+
+  /* 4g. Encoder Diagnostics: "ENC" or "GET_ENC" or "ENC?" */
+  if (strcasecmp(line, "ENC") == 0 || strcasecmp(line, "GET_ENC") == 0 ||
+      strcasecmp(line, "ENC?") == 0) {
+    char enc_s[32], err_s[32], off_s[32];
+    CMD_FormatFloat(enc_s, sizeof(enc_s), ClosedLoop_GetMeasuredDeg(), 3);
+    CMD_FormatFloat(err_s, sizeof(err_s), ClosedLoop_GetFollowingError(), 3);
+    CMD_FormatFloat(off_s, sizeof(off_s), ClosedLoop_GetStaticOffset(), 3);
+    snprintf(reply, sizeof(reply),
+             "ENC: Raw=%u | Counts=%lld | Output=%s DEG | Err=%s DEG | Offset=%s DEG | Conn=%d | Pol=%d\r\n",
+             ClosedLoop_GetRawAngle(), (long long)ClosedLoop_GetCounts(),
+             enc_s, err_s, off_s, ClosedLoop_IsSensorOnline(), ClosedLoop_GetPolarity());
+    USB_CDC_Print(reply);
+    return;
+  }
+
+  /* 4h. Encoder Polarity: "SET_ENC_DIR <1|-1>" or "ENC_DIR <1|-1>" */
+  if (strncasecmp(line, "SET_ENC_DIR", 11) == 0 || strncasecmp(line, "ENC_DIR", 7) == 0) {
+    char *e_ptr = (strncasecmp(line, "SET_ENC_DIR", 11) == 0) ? (line + 11) : (line + 7);
+    while (isspace((unsigned char)*e_ptr) || *e_ptr == '=') e_ptr++;
+    int8_t pol = (int8_t)atoi(e_ptr);
+    if (pol == 1 || pol == -1) {
+      ClosedLoop_SetPolarity(pol);
+      snprintf(reply, sizeof(reply), "OK: Encoder polarity set to %d\r\n", pol);
+      USB_CDC_Print(reply);
+    } else {
+      USB_CDC_Print("ERR: Expected SET_ENC_DIR 1 or -1\r\n");
+    }
     return;
   }
 
